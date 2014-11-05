@@ -14,8 +14,8 @@ var url = env.URL || "https://cloud.doodle3d.com";
 //var url = env.URL || "http://localhost:5000";
 var numClients = parseInt(env.NUM || 20); //EMFILE after 29. wish: 500
 var initInterval = parseInt(env.INIT_INTERVAL || 1000);
-var initRandom = parseInt(env.INIT_RANDOM) || 2000;
-var emitInterval = parseInt(env.INTERVAL) || 1000;
+var initRandom = parseInt(env.INIT_RANDOM || 2000);
+var emitInterval = parseInt(env.INTERVAL || 1000);
 var file = env.FILE || "file0.jpg";
 
 initInterval = initInterval+Math.random()*initRandom;

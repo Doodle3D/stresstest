@@ -14,9 +14,9 @@ var url = env.URL || "https://cloud.doodle3d.com";
 //var url = env.URL || "http://localhost:5000";
 var numClients = parseInt(env.NUM || 100);
 var initInterval = parseInt(env.INIT_INTERVAL || 3000);
-var initRandom = parseInt(env.INIT_RANDOM) || 3000;
-var emitInterval = parseInt(env.INTERVAL) || 5*60*1000;
-var emitIntervalRandom = parseInt(env.INTERVAL_RANDOM) || 2000;
+var initRandom = parseInt(env.INIT_RANDOM || 3000);
+var emitInterval = parseInt(env.INTERVAL || 5*60*1000);
+var emitIntervalRandom = parseInt(env.INTERVAL_RANDOM || 2000);
 var file = env.FILE || "file.stl";
 
 
