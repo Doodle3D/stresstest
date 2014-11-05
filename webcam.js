@@ -23,7 +23,11 @@ mainDebug("initInterval: ",initInterval);
 mainDebug("emitInterval: ",emitInterval);
 
 var index = 0;
-createNext();
+var d = require('domain').create();
+d.on('error', function(err) {
+  mainDebug('Domain error: ', err.message);
+});
+d.run(createNext);
 function createNext() {
   mainDebug("index: "+index);
   new Printer(index,function(err,nspName) {
@@ -55,7 +59,9 @@ function Printer(index,callback) {
         //debug(index+": /webcam: connected");
         callback(null,nspName);
         _streamSocket = ss(webcamSocket);
-        
+        _streamSocket.on('error',function(err) {
+          debug(index+": /webcam stream: error: ",err.message); 
+        });
         if(emitInterval === -1) {
           _self.sendFile();
         } else {
@@ -63,12 +69,12 @@ function Printer(index,callback) {
         }
         
       });
-      webcamSocket.once('error',function(err) {
-        debug(index+": /webcam: error: ",err); 
+      webcamSocket.on('error',function(err) {
+        debug(index+": /webcam: error: ",err.message); 
       });
     });
-    rootSocket.once('error',function(err) {
-      debug(index+": /: error: ",err); 
+    rootSocket.on('error',function(err) {
+      debug(index+": /: error: ",err.message); 
     });
   });
   this.sendFile = function() {
@@ -80,7 +86,11 @@ function Printer(index,callback) {
     var stream = ss.createStream();
     //debug(index+": emit image"); 
     _streamSocket.emit('image', stream, {name: filename});
-    fs.createReadStream(filename).pipe(stream);
+    var readStream = fs.createReadStream(filename);
+    readStream.pipe(stream);
+    readStream.on('error',function(err) {
+      debug("readStream error: ",err.message);
+    });
     stream.on("end",function() {
       var elapsed = ms(Date.now()-startTime);
       debug("emitted image in: "+elapsed);
@@ -109,8 +119,15 @@ function App(index,nspName) {
         var filename = path.basename(data.name);
         //filename = "received/"+index+":"+filename;
         filename = "received/"+filename;
-        stream.pipe(fs.createWriteStream(filename));
+        var writeStream = fs.createWriteStream(filename);
+        stream.pipe(writeStream);
+        writeStream.on('error',function(err) {
+          debug("writeStream error: ",err.message);
+        });
       });
+    });
+    webcamSocket.on('error',function(err) {
+      debug(index+": /webcam: error: ",err.message); 
     });
   });
   function connect(nsp) {

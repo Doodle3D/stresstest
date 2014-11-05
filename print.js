@@ -26,7 +26,12 @@ mainDebug("initInterval: ",initInterval);
 mainDebug("emitInterval: ",emitInterval);
 
 var index = 0;
-createNext();
+var d = require('domain').create();
+d.on('error', function(err) {
+  mainDebug('Domain error: ', err.message);
+});
+d.run(createNext);
+//createNext();
 function createNext() {
   mainDebug("index: "+index);
   new Printer(index,function(err,nspName) {
@@ -60,15 +65,19 @@ function Printer(index,callback) {
           //debug(index+": print: ",data.name); 
           var filename = path.basename(data.name);
           filename = "received/"+index+":"+filename;
-          stream.pipe(fs.createWriteStream(filename));
+          var writeStream = fs.createWriteStream(filename);
+          stream.pipe(writeStream);
+          writeStream.on('error',function(err) {
+            debug("writeStream error: ",err.message);
+          });
         });
       });
-      printerSocket.once('error',function(err) {
-        debug(index+": /printer: error: ",err); 
+      printerSocket.on('error',function(err) {
+        debug(index+": /printer: error: ",err.message); 
       });
     });
-    rootSocket.once('error',function(err) {
-      debug(index+": /: error: ",err); 
+    rootSocket.on('error',function(err) {
+      debug(index+": /: error: ",err.message); 
     });
   });
   function connect(nsp) {
@@ -107,15 +116,23 @@ function App(index,nspName) {
       var stream = ss.createStream();
       debug(index+": emit print"); 
       streamSocket.emit('print', stream, {name: filename});
-      fs.createReadStream(filename).pipe(stream);
+      var readStream = fs.createReadStream(filename);
+      readStream.pipe(stream);
+      readStream.on('error',function(err) {
+        debug("readStream error: ",err.message);
+      });
       stream.on("end",function() {
         var elapsed = ms(Date.now()-startTime);
         debug(index+":  print send in: ",elapsed);
         _sending = false;
       });
     });
-    socket.once('error',function(err) {
-      debug(index+": error: ",err); 
+    socket.on('error',function(err) {
+      debug(index+": /printer: error: ",err.message); 
+    });
+    var rootSocket = connect('/');
+    rootSocket.on('error',function(err) {
+      debug(index+": /: error: ",err.message); 
     });
   };
   function connect(nsp) {
