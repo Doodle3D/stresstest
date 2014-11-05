@@ -15,7 +15,7 @@ var url = env.URL || "https://cloud.doodle3d.com";
 var numClients = parseInt(env.NUM || 100);
 var initInterval = parseInt(env.INIT_INTERVAL || 3000);
 var initRandom = parseInt(env.INIT_RANDOM || 3000);
-var emitInterval = parseInt(env.INTERVAL || 10*1000); //5*60*1000
+var emitInterval = parseInt(env.INTERVAL || 5*60*1000);
 var emitIntervalRandom = parseInt(env.INTERVAL_RANDOM || 2000);
 var file = env.FILE || "file.stl";
 
@@ -33,14 +33,17 @@ d.on('error', function(err) {
 d.run(createNext);
 //createNext();
 function createNext() {
-  mainDebug("index: "+index);
-  new Printer(index,function(err,nspName) {
-    new App(index,nspName);
-  });
+  create(index);
   index++;
   if(index < numClients) {
     setTimeout(createNext,initInterval);
   }
+}
+function create(index) {
+  mainDebug("index: "+index);
+  new Printer(index,function(err,nspName) {
+    new App(index,nspName);
+  });
 }
 
 
@@ -99,6 +102,7 @@ function App(index,nspName) {
     if(emitInterval === -1) {
       _self.sendFile();
     } else {
+      _self.sendFile();
       setInterval(_self.sendFile,emitInterval);
     }
   });
@@ -109,7 +113,7 @@ function App(index,nspName) {
     var streamSocket = ss(socket);
     socket.once('connect',function() {
       //debug(index+": connected"); 
-      if(_sending) return;
+      if(_sending) return debug("still sending previous file");
       _sending = true;
       var startTime = Date.now();
       var filename = file;
