@@ -23,6 +23,9 @@ mainDebug("initInterval: ",initInterval);
 mainDebug("emitInterval: ",emitInterval);
 
 var index = 0;
+var createNextTimeout;
+var sockets = [];
+var emitIntervals = [];
 var d = require('domain').create();
 d.on('error', function(err) {
   mainDebug('Domain error: ', err.message);
@@ -35,7 +38,7 @@ function createNext() {
   });
   index++;
   if(index < numClients) {
-    setTimeout(createNext,initInterval);
+    createNextTimeout = setTimeout(createNext,initInterval);
   }
 }
 
@@ -50,11 +53,11 @@ function Printer(index,callback) {
     if(err) return debug("register err: ",err);
     //debug(index+": registered");
     _key = key;
-    var rootSocket = connect('/');
+    var rootSocket = connect('/',key,"printer");
     rootSocket.once('connect',function() {
       //debug(index+": /: connected"); 
       var nspName = '/'+id+'-webcam';
-      var webcamSocket = connect(nspName);
+      var webcamSocket = connect(nspName,key,"printer");
       webcamSocket.once('connect',function() {
         //debug(index+": /webcam: connected");
         callback(null,nspName);
@@ -65,7 +68,8 @@ function Printer(index,callback) {
         if(emitInterval === -1) {
           _self.sendFile();
         } else {
-          setInterval(_self.sendFile,emitInterval);
+          var interval = setInterval(_self.sendFile,emitInterval);
+          emitIntervals.push(interval);
         }
         
       });
@@ -97,9 +101,6 @@ function Printer(index,callback) {
       _sending = false;
     });
   };
-  function connect(nsp) {
-    return io.connect(url+nsp+'?type=printer&key='+_key, {forceNew:true});
-  }
 }
                 
 function App(index,nspName) {
@@ -110,7 +111,7 @@ function App(index,nspName) {
     if(err) return appDebug("register err: ",err);
     //debug(index+": registered");
     _key = key;
-    var webcamSocket = connect(nspName);
+    var webcamSocket = connect(nspName,key);
     webcamSocket.once('connect',function() {
       //debug(index+": /webcam: connected");
       var streamSocket = ss(webcamSocket);
@@ -130,7 +131,34 @@ function App(index,nspName) {
       debug(index+": /webcam: error: ",err.message); 
     });
   });
-  function connect(nsp) {
-    return io.connect(url+nsp+'?key='+_key, {forceNew:true});
+}
+
+function connect(nsp,key,type) {
+  var nspURL = url+nsp+'?key='+key;
+  if(type !== undefined) nspURL += "&type="+type;
+  var socket = io.connect(nspURL, {forceNew:true});
+  sockets.push(socket);
+  return socket;
+}
+
+process.on('SIGINT', gracefullShutdown);
+process.on('SIGTERM', gracefullShutdown);
+function gracefullShutdown() {
+  mainDebug("gracefullShutdown");
+  // stop creating new
+  clearTimeout(createNextTimeout);
+  // stop emits
+  for(var i in emitIntervals) {
+    clearInterval(emitIntervals[i]);
+  }
+  // slowly disconnect sockets
+  var index = sockets.length;
+  disconnectNext();
+  function disconnectNext() {
+    index--;
+    mainDebug(  "disconnect: ",index);
+    sockets[index].disconnect();
+    if(index > 0) setTimeout(disconnectNext,100);
+    else process.exit(1);
   }
 }

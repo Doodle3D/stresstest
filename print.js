@@ -26,6 +26,9 @@ mainDebug("initInterval: ",initInterval);
 mainDebug("emitInterval: ",emitInterval);
 
 var index = 0;
+var createNextTimeout;
+var sockets = [];
+var emitIntervals = [];
 var d = require('domain').create();
 d.on('error', function(err) {
   mainDebug('Domain error: ', err.message);
@@ -36,7 +39,7 @@ function createNext() {
   create(index);
   index++;
   if(index < numClients) {
-    setTimeout(createNext,initInterval);
+    createNextTimeout = setTimeout(createNext,initInterval);
   }
 }
 function create(index) {
@@ -49,17 +52,15 @@ function create(index) {
 
 function Printer(index,callback) {
   var debug = printerDebug;
-  var _key;
   //debug(index+": init");
   utils.printerRegister(url,function(err,key,id) {
     if(err) return debug("register err: ",err);
     //debug(index+": registered");
-    _key = key;
-    var rootSocket = connect('/');
+    var rootSocket = connect('/',key,"printer");
     rootSocket.once('connect',function() {
       //debug(index+": /: connected"); 
       var nspName = '/'+id+'-printer';
-      var printerSocket = connect(nspName);
+      var printerSocket = connect(nspName,key,"printer");
       printerSocket.once('connect',function() {
         //debug(index+": /printer: connected");
         callback(null,nspName);
@@ -83,33 +84,30 @@ function Printer(index,callback) {
       debug(index+": /: error: ",err.message); 
     });
   });
-  function connect(nsp) {
-    return io.connect(url+nsp+'?type=printer&key='+_key, {forceNew:true});
-  }
 }
                 
 function App(index,nspName) {
   var debug = appDebug;
-  var _key;
   var _sending = false;
   var _self = this;
+  var _key;
   //debug(index+": init: ",nspName);
   utils.userRegister(url,function(err,key,id) {
     if(err) return appDebug("register err: ",err);
     //debug(index+": registered");
     _key = key;
-    
     if(emitInterval === -1) {
       _self.sendFile();
     } else {
       _self.sendFile();
-      setInterval(_self.sendFile,emitInterval);
+      var interval = setInterval(_self.sendFile,emitInterval);
+      emitIntervals.push(interval);
     }
   });
   
   this.sendFile = function() {
     //debug(index+": sendFile"); 
-    var socket = connect(nspName);
+    var socket = connect(nspName,_key);
     var streamSocket = ss(socket);
     socket.once('connect',function() {
       //debug(index+": connected"); 
@@ -134,12 +132,39 @@ function App(index,nspName) {
     socket.on('error',function(err) {
       debug(index+": /printer: error: ",err.message); 
     });
-    var rootSocket = connect('/');
+    var rootSocket = connect('/',_key);
     rootSocket.on('error',function(err) {
       debug(index+": /: error: ",err.message); 
     });
   };
-  function connect(nsp) {
-    return io.connect(url+nsp+'?key='+_key, {forceNew:true});
+}
+
+function connect(nsp,key,type) {
+  var nspURL = url+nsp+'?key='+key;
+  if(type !== undefined) nspURL += "&type="+type;
+  var socket = io.connect(nspURL, {forceNew:true});
+  sockets.push(socket);
+  return socket;
+}
+
+process.on('SIGINT', gracefullShutdown);
+process.on('SIGTERM', gracefullShutdown);
+function gracefullShutdown() {
+  mainDebug("gracefullShutdown");
+  // stop creating new
+  clearTimeout(createNextTimeout);
+  // stop emits
+  for(var i in emitIntervals) {
+    clearInterval(emitIntervals[i]);
+  }
+  // slowly disconnect sockets
+  var index = sockets.length;
+  disconnectNext();
+  function disconnectNext() {
+    index--;
+    mainDebug(  "disconnect: ",index);
+    sockets[index].disconnect();
+    if(index > 0) setTimeout(disconnectNext,100);
+    else process.exit(1);
   }
 }
